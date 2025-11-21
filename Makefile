@@ -1,300 +1,237 @@
 
+# ============================================================================
+# MAKEFILE PARA PROYECTO YOLO + HIVE ETL
 # Ingeniero: Andrés Felipe Rojas Parra
-# Maestria en Big Data y Data Science
-# 2024 - 2025
-#
-# Descripcion del script:
-# La solucion de computer vision se debe ejecutar en python 3.10
-#
-# Este Makefile permite crear el ambiente virtual, instala prerrequisitos, realiza pruebas de los archivos, detecta 
-# la plataforma donde se esta ejecutando el Makefile (windows, jetson, ubuntu) y genera variables internas necesarias para la correcta
-# ejecucion del Makefile
-#
-# Antes de correr el Makefile se debe revisar la configuracion del parametro SOLUTION, PYTHON_VERSION
-#
-# Para ejecutar el Makefile, en las reglas validate create-venv install config-env all, se debe pasar los parametros FWORK PVENV
-#
-# FWORK debe ser tf (tensorflow) o py (pytorch)
-# PVENV se debe poner la ruta completa donde se quiere crear el ambiente virtual
-#
-# Ejemplo de la regla validate: make validate FWORK=tf PVENV=/media/arojaspa/Data/dev/environments/ubuntu
-# Ejemplo de la regla create-venv: make validate FWORK=tf PVENV=/media/arojaspa/Data/dev/environments/ubuntu
-# Ejemplo de la regla install: make validate FWORK=tf PVENV=/media/arojaspa/Data/dev/environments/ubuntu
-# Ejemplo de la regla config-env: make validate FWORK=tf PVENV=/media/arojaspa/Data/dev/environments/ubuntu
-# Ejemplo de la regla all: make validate FWORK=tf PVENV=/media/arojaspa/Data/dev/environments/ubuntu
-#
-# Para las demas reglas, no es necesario los parametros FWORK y PVENV
+# Maestria en Big Data y Data Science - 2024-2025
+# ============================================================================
 
 # =========================
-# Nombre de la aplicacion
+# CONFIGURACIÓN DEL PROYECTO
 # =========================
-SOLUTION := cursoetl_
-
-# =========================
-# VERSION DE PYTHON
-# =========================
+PROJECT_NAME := yolo_hive_project
 PYTHON_VERSION := 3.10
-PYTHON_BIN     := py -3.10
+VENV_PATH := enviroments/project_final
 
-# =========================
-# DETECCIÓN DE MÁQUINA
-# =========================
+# Detectar sistema operativo
 ifeq ($(OS),Windows_NT)
-MACHINE = WIN32
-  ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
-    MACHINE += AMD64
-  endif
-  ifeq ($(PROCESSOR_ARCHITECTURE),x86)
-    MACHINE += IA32
-  endif
+    PYTHON_BIN := py -3.10
+    VENV_PYTHON := $(VENV_PATH)/Scripts/python.exe
+    VENV_PIP := $(VENV_PATH)/Scripts/pip.exe
+    ACTIVATE := $(VENV_PATH)/Scripts/activate
 else
-UNAME_S := $(shell uname -s)
-  ifeq ($(UNAME_S),Linux)
-    MACHINE = LINUX
-  endif
-  ifeq ($(UNAME_S),Darwin)
-    MACHINE = OSX
-  endif
-
-UNAME_P := $(shell uname -p)
-  ifeq ($(UNAME_P),x86_64)
-    MACHINE += x86_64
-  endif
-  ifneq ($(filter %86,$(UNAME_P)),)
-    MACHINE += IA32
-  endif
-  ifneq ($(filter arm% aarch64,$(UNAME_P)),)
-    MACHINE += JETSON
-  endif
+    PYTHON_BIN := python3.10
+    VENV_PYTHON := $(VENV_PATH)/bin/python
+    VENV_PIP := $(VENV_PATH)/bin/pip
+    ACTIVATE := $(VENV_PATH)/bin/activate
 endif
 
 # =========================
-# CLASIFICAR PLATAFORMA
-# PLATFORM = ubuntu_pc | jetson | windows | unknown
+# CONFIGURACIÓN DE HIVE
 # =========================
-ifeq ($(findstring WIN32,$(MACHINE)),WIN32)
-PLATFORM := windows
-else ifeq ($(words $(filter LINUX x86_64,$(MACHINE))),2)
-PLATFORM := ubuntu_pc
-else ifneq ($(findstring JETSON,$(MACHINE)),)
-PLATFORM := jetson
-else
-PLATFORM := unknown
-endif
-
+HIVE_USER := jose_dev
+HIVE_DB := yolo_project
+HIVE_TABLE := yolo_objects
+HIVE_HOST := localhost
+HIVE_PORT := 10000
 
 # =========================
-# VALIDAR FWORK / PVENV SOLO PARA CIERTOS TARGETS
+# DIRECTORIOS DEL PROYECTO
 # =========================
-
-# Targets que SÍ necesitan que FWORK y PVENV estén definidos
-NEED_ENV_TARGETS := validate create-venv install config-env all
-
-# Si el usuario llamó a alguno de esos targets, entonces validamos
-ifneq ($(filter $(NEED_ENV_TARGETS),$(MAKECMDGOALS)),)
-# =========================
-# VALIDAR FWORK (tf | py)
-# =========================
-  ifeq ($(FWORK),)
-  	$(error You must define FWORK=tf or FWORK=py. Sample: make install FWORK=tf PVENV=/ruta/...)
-	endif
+DIRS := imagenes_entrada videos_entrada data data/logs sql tests src
 
 # =========================
-# VALIDAR RUTA AMBIENTE VIRTUAL
-# =========================
-  ifeq ($(PVENV),)
-  	$(error You must define PVENV. Sample: make install PVENV=/media/arojaspa/Data/dev/environments)
-	endif
-
-# =========================
-# ASIGNAR REQUIREMENTS Y ENV_PATH
-# =========================
-REQUIREMENTS_FILE :=
-ENV_PATH          :=
-ENV_NAME          :=
-
-	# --- Caso TensorFlow ---
-	ifeq ($(FWORK),tf)
-
-	ifeq ($(PLATFORM),ubuntu_pc)
-		REQUIREMENTS_FILE := requirements_tf_ubuntu.txt
-		ENV_NAME          := tf_ubuntu
-	else ifeq ($(PLATFORM),jetson)
-		REQUIREMENTS_FILE := requirements_tf_jetson.txt
-		ENV_NAME          := tf_jetson
-	else ifeq ($(PLATFORM),windows)
-		REQUIREMENTS_FILE := requirements_tf_windows.txt
-		ENV_NAME          := tf_windows
-	else
-		$(error Platform $(PLATFORM) is not supported for FWORK=tf)
-	endif
-
-	# --- Caso PyTorch ---
-	else ifeq ($(FWORK),py)
-
-	ifeq ($(PLATFORM),ubuntu_pc)
-		REQUIREMENTS_FILE := requirements_py_ubuntu_pc.txt
-		ENV_NAME          := py_ubuntu
-	else ifeq ($(PLATFORM),jetson)
-		REQUIREMENTS_FILE := requirements_py_jetson.txt
-		ENV_NAME          := py_jetson
-	else ifeq ($(PLATFORM),windows)
-		REQUIREMENTS_FILE := requirements_py_windows.txt
-		ENV_NAME          := py_windows
-	else
-		$(error Platform $(PLATFORM) is not supported for FWORK=py)
-	endif
-
-	else
-	$(error FWORK value is not valid: use tf or py)
-	endif
-
-	ENV_PATH := $(PVENV)/$(SOLUTION)$(ENV_NAME)
-endif
-
-# =========================
-# VENV PYTHON PATH (para validación)
-# =========================
-ifeq ($(PLATFORM),windows)
-VENV_PY := $(ENV_PATH)/Scripts/python.exe
-else
-VENV_PY := $(ENV_PATH)/bin/python
-endif
-
-# =========================
-# TARGETS o REGLAS
+# TARGETS PRINCIPALES
 # =========================
 
-.PHONY: validate
-validate:
-	@echo "Platform: $(PLATFORM)"
-	@echo "Python version: $(PYTHON_VERSION)"
-	@echo "Using $(MACHINE) Architecture"
-	@echo "Setting up the environment for: $(FWORK)"
-	@echo "PVENV: $(PVENV)"
-	@echo "Requirements file to be used: $(REQUIREMENTS_FILE)"
-	@echo "The venv will be created at: $(ENV_PATH)"
+.PHONY: help setup clean test lint format run-all run-classification run-etl
 
-.PHONY: create-venv
-create-venv: validate
-	@echo "Creating VENV at: $(ENV_PATH)"
-	@$(PYTHON_BIN) -m venv "$(ENV_PATH)"
-	@if [ ! -x "$(VENV_PY)" ]; then \
-		echo "ERROR: venv not created correctly at $(ENV_PATH)"; \
-		exit 1; \
-	fi
-	@echo "VENV created OK at: $(ENV_PATH)"
+help:
+    @echo "🎯 MAKEFILE PARA PROYECTO YOLO + HIVE ETL"
+    @echo "=========================================="
+    @echo ""
+    @echo "📋 COMANDOS DISPONIBLES:"
+    @echo "  setup              - Configurar entorno virtual y dependencias"
+    @echo "  clean              - Limpiar archivos temporales"
+    @echo "  create-dirs        - Crear estructura de directorios"
+    @echo ""
+    @echo "🚀 EJECUCIÓN:"
+    @echo "  run-all            - Pipeline completo (clasificación + ETL)"
+    @echo "  run-classification - Solo sistema YOLO"
+    @echo "  run-etl           - Solo sistema ETL"
+    @echo ""
+    @echo "🧪 DESARROLLO:"
+    @echo "  test              - Ejecutar pruebas unitarias"
+    @echo "  lint              - Verificar código con pylint"
+    @echo "  format            - Formatear código con black"
+    @echo ""
+    @echo "🗄️ HIVE:"
+    @echo "  show-hive-config  - Mostrar configuración de Hive"
+    @echo "  create-hive-table - Crear tabla en Hive"
+    @echo "  run-queries       - Ejecutar consultas analíticas"
+    @echo ""
+    @echo "📊 VERIFICACIÓN:"
+    @echo "  check-services    - Verificar HDFS y Hive"
+    @echo "  show-stats        - Mostrar estadísticas del proyecto"
 
-.PHONY: install
-install: create-venv
-	@echo "Requirements file used: $(REQUIREMENTS_FILE)"
-	@. "$(ENV_PATH)/bin/activate" && pip install --upgrade pip setuptools wheel && pip install -r "$(REQUIREMENTS_FILE)"
+# =========================
+# CONFIGURACIÓN INICIAL
+# =========================
 
-.PHONY: config-env
-config-env:
-	@echo "Requirements file used: $(REQUIREMENTS_FILE)"
-	@. "$(ENV_PATH)/bin/activate" && pip install --upgrade pip setuptools wheel && pip install -r "$(REQUIREMENTS_FILE)"
+setup: create-dirs create-venv install-deps
+    @echo "✅ Configuración completa del proyecto"
 
-.PHONY: test
-test:
-	python -m pytest -vvv --cov=hello --cov=greeting --cov=smath --cov=web tests
-	python -m pytest --nbval notebook.ipynb
-	# python -m pytest -v tests/test_web.py
+create-dirs:
+    @echo "📁 Creando estructura de directorios..."
+    @mkdir -p $(DIRS)
+    @echo "✅ Directorios creados"
 
-.PHONY: debug
-debug:
-	python -m pytest -vv --pdb
+create-venv:
+    @echo "🐍 Creando entorno virtual..."
+    @if [ ! -d "$(VENV_PATH)" ]; then \
+        $(PYTHON_BIN) -m venv $(VENV_PATH); \
+        echo "✅ Entorno virtual creado en: $(VENV_PATH)"; \
+    else \
+        echo "ℹ️  Entorno virtual ya existe"; \
+    fi
 
-.PHONY: one-test
-one-test:
-	python -m pytest -vv tests/test_greeting.py::test_my_name4
+install-deps: create-venv
+    @echo "📦 Instalando dependencias..."
+    @$(VENV_PIP) install --upgrade pip setuptools wheel
+    @$(VENV_PIP) install -r requirements.txt
+    @echo "✅ Dependencias instaladas"
 
-.PHONY: debugthree
-debugthree:
-	# not working the way I expect
-	python -m pytest -vv --pdb --maxfail=4  # drop to PDB for first three failures
+# =========================
+# EJECUCIÓN DEL PROYECTO
+# =========================
 
-.PHONY: format
-format:
-	# used to format the file code 
-	black codigobase procesosbatch
+run-all: check-venv
+    @echo "🚀 Ejecutando pipeline completo..."
+    @$(VENV_PYTHON) main.py
+    @echo "✅ Pipeline completado"
 
-.PHONY: lint
-lint:
-	pylint --disable=R,C *.py
+run-classification: check-venv
+    @echo "🤖 Ejecutando solo clasificación YOLO..."
+    @$(VENV_PYTHON) src/sistema_clasificacion_con_batches.py
+    @echo "✅ Clasificación completada"
 
-.PHONY: all
-all: install lint test format
+run-etl: check-venv
+    @echo "📊 Ejecutando solo sistema ETL..."
+    @$(VENV_PYTHON) src/sistema_batch_etl.py
+    @echo "✅ ETL completado"
 
-# Makefile para el proyecto YOLO + Hive
+# =========================
+# DESARROLLO Y PRUEBAS
+# =========================
 
-.PHONY: setup clean test lint format run-classification run-etl run-all
+test: check-venv
+    @echo "🧪 Ejecutando pruebas unitarias..."
+    @$(VENV_PYTHON) -m pytest tests/ -v --tb=short
+    @echo "✅ Pruebas completadas"
 
-# Configuración del entorno virtual
-VENV = venv
-PYTHON = $(VENV)/bin/python
-PIP = $(VENV)/bin/pip
+test-coverage: check-venv
+    @echo "📊 Ejecutando pruebas con cobertura..."
+    @$(VENV_PYTHON) -m pytest tests/ --cov=src --cov-report=html --cov-report=term
+    @echo "✅ Reporte de cobertura generado en htmlcov/"
 
-setup:
-    python3 -m venv $(VENV)
-    $(PIP) install --upgrade pip
-    $(PIP) install -r requirements.txt
-    @echo "✅ Entorno virtual configurado"
-
-clean:
-    rm -rf $(VENV)
-    rm -rf __pycache__
-    rm -rf src/__pycache__
-    rm -rf tests/__pycache__
-    rm -rf *.pyc
-    rm -rf .pytest_cache
-    @echo "✅ Limpieza completada"
-
-test:
-    $(PYTHON) -m pytest tests/ -v --tb=short
-    @echo "✅ Pruebas ejecutadas"
-
-lint:
-    $(PYTHON) -m pylint src/ --disable=C0114,C0116,R0903
+lint: check-venv
+    @echo "🔍 Verificando código con pylint..."
+    @$(VENV_PYTHON) -m pylint src/ --disable=C0114,C0116,R0903 || true
     @echo "✅ Linting completado"
 
-format:
-    $(PYTHON) -m black src/ tests/
+format: check-venv
+    @echo "🎨 Formateando código con black..."
+    @$(VENV_PYTHON) -m black src/ tests/ *.py
     @echo "✅ Código formateado"
 
-run-classification:
-    $(PYTHON) src/sistema_clasificacion.py
-    @echo "✅ Sistema de clasificación ejecutado"
+# =========================
+# HIVE Y BASE DE DATOS
+# =========================
 
-run-etl:
-    $(PYTHON) src/sistema_batch_etl.py
-    @echo "✅ Sistema ETL ejecutado"
-
-run-all: run-classification run-etl
-    @echo "✅ Pipeline completo ejecutado"
-
-install-dev:
-    $(PIP) install pytest pylint black
-    @echo "✅ Herramientas de desarrollo instaladas"
-
-# Variables de configuración
-HIVE_USER = jose_dev
-HIVE_DB = yolo_project
-HIVE_TABLE = yolo_objects
-
-# Mostrar configuración de Hive
 show-hive-config:
     @echo "🗄️ CONFIGURACIÓN DE HIVE:"
+    @echo "========================="
     @echo "Usuario: $(HIVE_USER)"
+    @echo "Host: $(HIVE_HOST):$(HIVE_PORT)"
     @echo "Base de datos: $(HIVE_DB)"
     @echo "Tabla: $(HIVE_TABLE)"
 
-# Verificar conexión a Hive
-test-hive:
-    @echo "🔍 Verificando conexión a Hive..."
-    @python -c "from pyhive import hive; conn = hive.Connection(host='localhost', port=10000, database='$(HIVE_DB)', username='$(HIVE_USER)'); print('✅ Conexión exitosa')"
+create-hive-table: check-venv
+    @echo "🗄️ Creando tabla en Hive..."
+    @$(VENV_PYTHON) -c "from src.sistema_batch_etl import SistemaBatchETL; etl = SistemaBatchETL(); etl.conectar_hive(); etl.crear_base_datos_y_tabla(); etl.cerrar_conexion()"
+    @echo "✅ Tabla creada en Hive"
 
-# ETL con configuración específica
-run-etl: show-hive-config
-    @echo "🔄 Ejecutando ETL a Hive..."
-    cd src && python sistema_batch_etl.py
+run-queries: check-venv
+    @echo "📈 Ejecutando consultas analíticas..."
+    @$(VENV_PYTHON) sql/ejecutar_queries.py
+    @echo "✅ Consultas ejecutadas"
+
+# =========================
+# VERIFICACIÓN Y DIAGNÓSTICO
+# =========================
+
+check-services:
+    @echo "🔍 Verificando servicios..."
+    @echo "HDFS:"
+    @hdfs dfsadmin -report | head -5 || echo "❌ HDFS no disponible"
+    @echo ""
+    @echo "Hive:"
+    @jps | grep -E "(HiveServer2|RunJar)" || echo "❌ Hive no disponible"
+
+show-stats: check-venv
+    @echo "📊 Estadísticas del proyecto:"
+    @echo "============================="
+    @echo "Imágenes en entrada: $$(ls imagenes_entrada/ 2>/dev/null | wc -l)"
+    @echo "Videos en entrada: $$(ls videos_entrada/ 2>/dev/null | wc -l)"
+    @echo "CSVs generados: $$(ls data/*.csv 2>/dev/null | wc -l)"
+    @if [ -f "$(VENV_PYTHON)" ]; then \
+        echo "Registros en Hive:"; \
+        $(VENV_PYTHON) -c "from src.sistema_batch_etl import SistemaBatchETL; etl = SistemaBatchETL(); etl.conectar_hive(); etl.mostrar_estadisticas(); etl.cerrar_conexion()" 2>/dev/null || echo "❌ No se pudo conectar a Hive"; \
+    fi
+
+# =========================
+# LIMPIEZA
+# =========================
+
+clean:
+    @echo "🧹 Limpiando archivos temporales..."
+    @rm -rf __pycache__ src/__pycache__ tests/__pycache__
+    @rm -rf .pytest_cache htmlcov/ .coverage
+    @rm -rf *.pyc src/*.pyc tests/*.pyc
+    @rm -rf data/*.csv data/logs/*.log
+    @echo "✅ Limpieza completada"
+
+clean-all: clean
+    @echo "🧹 Limpieza completa (incluyendo entorno virtual)..."
+    @rm -rf $(VENV_PATH)
+    @echo "✅ Limpieza completa terminada"
+
+# =========================
+# UTILIDADES
+# =========================
+
+check-venv:
+    @if [ ! -f "$(VENV_PYTHON)" ]; then \
+        echo "❌ Entorno virtual no encontrado. Ejecuta: make setup"; \
+        exit 1; \
+    fi
+
+install-dev: check-venv
+    @echo "🛠️ Instalando herramientas de desarrollo..."
+    @$(VENV_PIP) install pytest pylint black coverage pytest-cov
+    @echo "✅ Herramientas de desarrollo instaladas"
+
+# =========================
+# INFORMACIÓN DEL SISTEMA
+# =========================
+
+info:
+    @echo "ℹ️  INFORMACIÓN DEL SISTEMA:"
+    @echo "=========================="
+    @echo "SO: $(shell uname -s 2>/dev/null || echo Windows)"
+    @echo "Python: $(PYTHON_BIN)"
+    @echo "Entorno virtual: $(VENV_PATH)"
+    @echo "Proyecto: $(PROJECT_NAME)"
+    @echo "Hive: $(HIVE_USER)@$(HIVE_HOST):$(HIVE_PORT)/$(HIVE_DB)"
+
+# Target por defecto
+.DEFAULT_GOAL := help

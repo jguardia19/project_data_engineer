@@ -45,16 +45,16 @@ class ETLPipeline:
             bool: True si exitoso
         """
         try:
-            print("🚀 Iniciando proceso ETL...")
+            print("Iniciando proceso ETL...")
 
-            # EXTRACCIÓN
+            #extraer datos
             df_nvidia, df_sent, flags = self.extractor.extract_data(debug)
 
             if flags['error']:
                 print("❌ Error en extracción - cancelando job")
                 return False
 
-            # TRANSFORMACIÓN
+            # transformar y limpiaza de datos
             clean_data = self.transformer.transform_data(
                 df_nvidia, df_sent, flags, debug)
 
@@ -62,21 +62,21 @@ class ETLPipeline:
                 print("⚠️ No hay datos nuevos para procesar")
                 return True
 
-            print(f"📊 Datos a procesar: {len(clean_data)} registros")
+            print(f"Datos a procesar: {len(clean_data)} registros")
 
-            # CARGA
+            #cargar datos a hive
             if self.loader.load_data(clean_data, debug):
                 # Actualizar archivo de control
                 self.extractor.delete_sent_file()
                 self.save_sent_data(df_sent, clean_data)
-                print("✅ Proceso ETL completado exitosamente")
+                print("Proceso ETL completado exitosamente")
                 return True
             else:
-                print("❌ Error en carga de datos")
+                print("Error en carga de datos")
                 return False
 
         except Exception as e:
-            print(f"❌ Error en pipeline ETL: {e}")
+            print(f"Error en pipeline ETL: {e}")
             return False
 
     def run_scheduled(self, debug=False):

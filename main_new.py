@@ -1,4 +1,4 @@
-import os  # 👈 IMPORTAR OS PRIMERO
+import os  
 
 # 👇 DESACTIVAR GPU / CUDA PARA TENSORFLOW ANTES DE IMPORTARLO
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # TensorFlow no verá ninguna GPU
@@ -20,6 +20,7 @@ except Exception as e:
     print("Aviso al desactivar GPUs en TF:", e)
 
 print("GPUs visibles para TF:", tf.config.list_physical_devices('GPU'))  # Debería imprimir []
+
 
 class DeteccionInfracciones:
     def __init__(self, modelo_yolo_path, carpeta_infracciones, archivo_csv, fuente=0, ancho_deseado=640, alto_deseado=480, id_camara=1, zona="Zona 1"):
@@ -100,7 +101,7 @@ class DeteccionInfracciones:
 
     def procesar_frame(self):
         ret, frame = self.cap.read()
-        if not ret:
+        if not ret: 
             return None
 
         frame_redimensionado = cv2.resize(frame, (self.ancho_deseado, self.alto_deseado))
@@ -173,9 +174,9 @@ class DeteccionInfracciones:
                 # 'color' aquí es 'm', 'c', 'y', así que usamos blanco como default
                 color_rgb = self.colores.get(color, (255, 255, 255))
                 cv2.line(frame,
-                         (int(puntos[i][1]), int(puntos[i][0])),
-                         (int(puntos[j][1]), int(puntos[j][0])),
-                         color_rgb, 2)
+                        (int(puntos[i][1]), int(puntos[i][0])),
+                        (int(puntos[j][1]), int(puntos[j][0])),
+                        color_rgb, 2)
 
         for punto in puntos:
             if punto[2] > 0.5:
